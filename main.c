@@ -8,9 +8,9 @@
 #include <sys/wait.h>
 
 char* getPidByName(char *proc_name) {
-	printf("\nAttempting to find PID of ");
-	printf(proc_name);
-	printf("\n");
+//	printf("\nAttempting to find PID of ");
+//	printf(proc_name);
+//	printf("\n");
 	FILE *fp;
 	char *pid = "-1";
 	int isPidNumber;
@@ -59,8 +59,8 @@ int main (void) {
 		printf("Running as Root. Quitting. \n");
 		return 0;
 	}
-	printf("%d", RunningUID);
-	printf("\n");
+//	printf("%d", RunningUID);
+//	printf("\n");
 	char *Return;
 	FILE *ConfigFile;
 	// char tempstring[256];
@@ -85,9 +85,9 @@ int main (void) {
 	char *argv[] = {DEStarter, NULL};
 	pid_t ChildPid;
 	int status;
-	printf("\nGetting PID was Successfull! Its: ");
-	printf(Return);
-	printf("\n");
+//	printf("\nGetting PID was Successfull! Its: ");
+//	printf(Return);
+//	printf("\n");
 	if ( strcmp(Return, "-1") == 0) {
 		printf("DE not Running. Starting it. \n");
 		status = posix_spawn(&ChildPid, DEStarter, NULL, NULL, argv, environ);
