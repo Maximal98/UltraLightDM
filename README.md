@@ -9,3 +9,7 @@ then, create a file called "config" in /etc/UL-DM/ and write
 1. the Command used to start the Desktop (ex: startxfce4/startx)
 2. the Process of the Desktop or a process that always runs with it (ex: xfce4-session)
 3. Profit!
+
+
+
+Warning: This project is mostly me just coming to grips with C, so the Code is probably bad.
