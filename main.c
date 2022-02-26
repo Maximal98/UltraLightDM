@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 
-char* getPidByName(char *proc_name, int verbose) {
+char* getPidByName(char proc_name[128], int verbose) {
 	//Setup for Getting the PID
 	if( verbose == 1 ) {
 		printf("\nAttempting to find PID of ");
@@ -16,13 +16,13 @@ char* getPidByName(char *proc_name, int verbose) {
 		printf("\n");
 	}
 	FILE *CurrentProcfile;
-	char *pid = "-1";
 	int isPidNumber;
 	struct dirent *procdir_ent;
 	char *CurrentPID;
 	char FullPath[60] = "This is an Error!";
 	char CurrentName[128];
 	int PID_counter = 0;
+	int compreturn;
 	//open /proc/
 	//TODO: Error Handling here.
 	DIR *procdir = opendir("/proc");
@@ -37,30 +37,33 @@ char* getPidByName(char *proc_name, int verbose) {
 				strcat(FullPath, "/comm");
 				CurrentProcfile = fopen(FullPath, "r");
 				if ( NULL == CurrentProcfile ) {
-					printf("Couldn't open file in /proc/ \n");
-					printf(FullPath);
-					printf("\n");
+					printf( "Couldn't open file in /proc/: %s \n", FullPath );
 					return "-2";
 				}
 				
 				//read Data of current file in /proc/
-				//TODO: use fgets
 				fgets( CurrentName, 128, CurrentProcfile );
+				CurrentName[strcspn( CurrentName, "\n" )] = 0;
 				fclose( CurrentProcfile );
 				//Check if DE name is found.
-				if(strcmp(CurrentName, proc_name) == 0) {
+				compreturn = strcmp(CurrentName, proc_name);
+				if( compreturn == 0 ) {
 					if( verbose == 1 ) {
-						printf("Found Desktop after Checking ");
-						printf("%d", PID_counter);
-						printf(" Entries in /proc/.\n");
+						printf("Found Desktop after Checking %d Entries in /proc/.\n", PID_counter);
 					}
-					pid = procdir_ent->d_name;
+					size_t pid_size = sizeof( procdir_ent->d_name );
+					char *pid = malloc( pid_size );
+					sprintf(pid, "%s", procdir_ent->d_name );
+
+
+					closedir(procdir);
+					return(pid);
 				}
 			}
 			
 		}
 		closedir(procdir);
-		return(pid);
+		return "-1" ;
 	}
 
 }
@@ -84,9 +87,7 @@ int run_DE(char *DE_name, int verbose) {
 		wait(&status);
 	}
 	else {
-		printf("couldn't start program, returned error code ");
-		printf("%d", errno);
-		printf("\n");
+		printf("couldn't start program, returned error code %d \n", errno);
 	}
 
 }
@@ -112,9 +113,7 @@ int main (int argc, char **argv) {
 	uid_t RunningUID;
 	RunningUID = getuid();
 	if( verbose == 1 ) {
-		printf("Running UID is: ");
-		printf("%d", RunningUID);
-		printf("\n");
+		printf("Running UID is: %d \n", RunningUID);
 	}
 	//checking if the program is running as Root
 	if ( RunningUID == 0 ) {
@@ -162,8 +161,7 @@ int main (int argc, char **argv) {
 	}
 	else {
 		if( verbose == 1) {
-			printf(Return);
-			printf("\n");
+			printf( "%s\n", Return );
 		}
 		printf("DE is Running. Exiting. \n");
 		return 0;
