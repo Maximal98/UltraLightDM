@@ -45,12 +45,15 @@ char* getPidByName(char proc_name[128], int verbose) {
 				fgets( CurrentName, 128, CurrentProcfile );
 				CurrentName[strcspn( CurrentName, "\n" )] = 0;
 				fclose( CurrentProcfile );
+				
 				//Check if DE name is found.
 				compreturn = strcmp(CurrentName, proc_name);
 				if( compreturn == 0 ) {
 					if( verbose == 1 ) {
 						printf("Found Desktop after Checking %d Entries in /proc/.\n", PID_counter);
 					}
+
+					//Allocate the space for the pid for returning and all
 					size_t pid_size = sizeof( procdir_ent->d_name );
 					char *pid = malloc( pid_size );
 					sprintf(pid, "%s", procdir_ent->d_name );
