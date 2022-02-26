@@ -13,3 +13,6 @@ then, create a file called "config" in /etc/UL-DM/ and write
 
 
 Warning: This project is mostly me just coming to grips with C, so the Code is probably bad.
+
+# Why would you do this?
+The reason i made this is beceause i noticed that lightdm used a whole 100 Megabytes of RAM while being inactive (on a computer with 16 gigabytes of RAM), so i decided to 1. make a bash script that does this and then 2. turn it into a C program because why the hell not?
