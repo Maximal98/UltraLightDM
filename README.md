@@ -1,5 +1,5 @@
 # UltraLightDM
-WARNING: This Utility works on Linux ONLY, unless ported.
+WARNING: This Utility has only been tested on linux, it may not work on something like BSD
 
 This is a Utility that Automaticaly starts the Desktop Environment. Written in C. it has a rather small footprint and is pretty dang fast.
 
