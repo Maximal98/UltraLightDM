@@ -42,7 +42,9 @@ int run_prog( char *prog_name, char **argv, int WaitOnProc ) {
 
 int main ( int argc, char **argv ) {
 
-	#define X 32
+	int errnum;
+
+	#define X 128
 
 	// Process arguments
 	if( argc > 2) {
@@ -84,11 +86,15 @@ int main ( int argc, char **argv ) {
 	if( verbose == 1 ) {
 		printf("[ \033[0;34mINFO\033[0m ] Loading config file.\n");
 	}
-	ConfigFile = fopen("/etc/UL-DM/config", "r");
+	ConfigFile = fopen("/etc/uldm/config", "r");
 	if( ConfigFile == NULL ) {
-		int error = errno;
-		printf("There was an error opening the Config file. Check if it exists and this user has read access to it.\n");
-		printf("[ \033[0;31mFAIL\033[0m ]: Error code %n\n", error );
+		errnum = errno;
+		if( errnum == NULL ) {
+			printf("FUCK");
+			return 1;
+		}
+		printf("test\n");
+		printf("There was an error opening the Config file. Check if it exists and this user has read access to it. fopen error %n\n", errnum);
 		return 1;
 	}
 
@@ -96,6 +102,7 @@ int main ( int argc, char **argv ) {
 
 	char DEProcess[128];
 	char ArgvPrep[X][128];
+	int ArgvLengthReal;
 
 	while( fgets( textbufffer, 128, ConfigFile ) ) {
 		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
@@ -120,12 +127,15 @@ int main ( int argc, char **argv ) {
 
 						strcpy( ArgvPrep[ArgAssemblerCounter], found );
 						ArgAssemblerCounter++;
-					}
+						
 
-					while( ArgAssemblerCounter < X ) {
-						strcpy( ArgvPrep[ArgAssemblerCounter], "" );
-						ArgAssemblerCounter++;
 					}
+					ArgvLengthReal = ArgAssemblerCounter;
+
+					// while( ArgAssemblerCounter < X ) {
+					//  	strcpy( ArgvPrep[ArgAssemblerCounter], "" );
+					//  	ArgAssemblerCounter++;
+					// }
 					
 
 					break;
@@ -149,8 +159,8 @@ int main ( int argc, char **argv ) {
 
 	}
 
-	char **new_argv = malloc(X * sizeof *new_argv);
-	for ( int i = 0; i < X; i++ ) {
+	char **new_argv = malloc(ArgvLengthReal * sizeof *new_argv);
+	for ( int i = 0; i < ArgvLengthReal; i++ ) {
 		new_argv[i] = ArgvPrep[i];
 	}
 
