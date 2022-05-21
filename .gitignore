@@ -1,3 +1,4 @@
 build/*
 !build/Makefile
+!build/objects
 build/objects/*
