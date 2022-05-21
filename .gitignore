@@ -1,2 +1,3 @@
-*.o
-uldm
+build/*
+!build/Makefile
+build/objects/*
