@@ -105,7 +105,7 @@ int main ( int argc, char **argv ) {
 		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
 
 		char *pointerbuffer = textbufffer;
-		char *found;
+		char *found = "placeholder";
 
 		while( (found = strsep(&pointerbuffer,"=")) != NULL )  {
 
@@ -115,9 +115,9 @@ int main ( int argc, char **argv ) {
 					//DEStarter
 
 					char *Stage2found = strsep(&pointerbuffer,"=");
-					int ArgAssemblerCounter;
+					int ArgAssemblerCounter = 0;
 
-					while( ( found = strsep( &Stage2found, "," ) ) ) {
+					while( ( found = strsep( &Stage2found, "," ) ) != NULL ) {
 						
 						// ArgvPrep[ArgAssemblerCounter] = found;
 						// NEVER DO THIS ^
@@ -249,9 +249,7 @@ int main ( int argc, char **argv ) {
 	// char* CryptSalt = malloc( 2 );
 
 	char *found2;
-	printf("Layer 1:%s\n", ShadowHash);
 	while( (found2 = strsep(&pointerbuffer,"$")) != NULL ) {
-		printf("Layer 2:%s\n", ShadowHash);
 		if( strcmp( found2, "" ) != 0 && cryptline <= 2 ) {
 			cryptline++;
 			switch ( cryptline ) {
@@ -270,7 +268,6 @@ int main ( int argc, char **argv ) {
 		}
 	}
 
-	printf("luise\n");
 
 	char *CryptSaltFinal = malloc(strlen(CryptAlgorythmID)+strlen(CryptSalt)+4);
 	sprintf(CryptSaltFinal,"$%s$%s$", CryptAlgorythmID, CryptSalt);
