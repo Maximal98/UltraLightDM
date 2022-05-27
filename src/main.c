@@ -7,8 +7,10 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <crypt.h>
 
-#include "libs/PID_Tools.h"
+#include <sys/ioctl.h>
+#include <ncurses.h>
 
 int verbose;
 extern char **environ;
@@ -69,8 +71,8 @@ int main ( int argc, char **argv ) {
 		printf("[ \033[0;34mINFO\033[0m ] Current UID is: %d \n", RunningUID);
 	}
 	//checking if the program is running as Root
-	if ( RunningUID == 0 ) {
-		printf("[ \033[0;31mFAIL\033[0m ] Running as Root. Quitting. \n");
+	if ( RunningUID != 0 ) {
+		printf("[ \033[0;31mEXIT\033[0m ] Must be run as root. Quitting. \n");
 		return 0;
 	}
 
@@ -89,12 +91,7 @@ int main ( int argc, char **argv ) {
 	ConfigFile = fopen("/etc/uldm/config", "r");
 	if( ConfigFile == NULL ) {
 		errnum = errno;
-		if( errnum == NULL ) {
-			printf("FUCK");
-			return 1;
-		}
-		printf("test\n");
-		printf("There was an error opening the Config file. Check if it exists and this user has read access to it. fopen error %n\n", errnum);
+		printf("There was an error opening the Config file. Check if it exists and this user has read access to it. fopen error %d\n", errnum);
 		return 1;
 	}
 
@@ -107,20 +104,20 @@ int main ( int argc, char **argv ) {
 	while( fgets( textbufffer, 128, ConfigFile ) ) {
 		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
 
-		char *ETHAN_BAD = textbufffer;
+		char *pointerbuffer = textbufffer;
 		char *found;
 
-		while( (found = strsep(&ETHAN_BAD,"=")) != NULL )  {
+		while( (found = strsep(&pointerbuffer,"=")) != NULL )  {
 
-			int chaosmonkey = strcmp( found, "DEStarter" );
-			switch ( chaosmonkey ) {
+			int switchint = strcmp( found, "DEStarter" );
+			switch ( switchint ) {
 				case 0:
 					//DEStarter
 
-					char *Found2TheSecondComing = strsep(&ETHAN_BAD,"=");
+					char *Stage2found = strsep(&pointerbuffer,"=");
 					int ArgAssemblerCounter;
 
-					while( ( found = strsep( &Found2TheSecondComing, "," ) ) ) {
+					while( ( found = strsep( &Stage2found, "," ) ) ) {
 						
 						// ArgvPrep[ArgAssemblerCounter] = found;
 						// NEVER DO THIS ^
@@ -131,20 +128,13 @@ int main ( int argc, char **argv ) {
 
 					}
 					ArgvLengthReal = ArgAssemblerCounter;
-
-					// while( ArgAssemblerCounter < X ) {
-					//  	strcpy( ArgvPrep[ArgAssemblerCounter], "" );
-					//  	ArgAssemblerCounter++;
-					// }
-					
-
 					break;
 				
 				case -3:
 					//DEProcess
 
 
-					char *found2 = strsep( &ETHAN_BAD, "=" );
+					char *found2 = strsep( &pointerbuffer, "=" );
 					strcpy( DEProcess, found2 );
 
 					break;
@@ -169,47 +159,143 @@ int main ( int argc, char **argv ) {
 
 	printf("[  \033[0;32mOK\033[0m  ] Successfully loaded config file!\n");
 
-	//Get PID of DE, if it returns -1, its not running.
-	//And start if its not running.
 
+	//Display & ncurses
+
+	initscr();
+
+	if (has_colors() == FALSE) {
+		endwin();
+		printf("[ \033[0;31mFAIL\033[0m ] Your terminal does not support color.\n");
+		return 1;
+	}
+
+	struct winsize w;
+	ioctl(0, TIOCGWINSZ, &w);
+
+	// creating a window;
+	// with height = 15 and width = 10
+	// also with start x axis 10 and start y axis = 20
+	WINDOW *authwin = newwin(5, 25, w.ws_row/2-4, w.ws_col/2-13);
+	refresh();
+
+	box(authwin, 0, 0);
+
+	// move and print in window
+	mvwprintw(authwin, 0, 1, "placeholder login");
+	mvwprintw(authwin, 1, 1, "Username:");
+	mvwprintw(authwin, 3, 1, "Password:");
+
+	wrefresh(authwin);
+
+	char *Username = malloc(129);
+
+	wmove(authwin, 1, 10);
+	echo();
+	wgetnstr(authwin, Username, 128);
+	Username[ strcspn( Username, "\n" ) ] = 0;
 	
 
-	char *PID = getPidByNameUID( DEProcess, RunningUIDChar, verbose );
-	if ( strcmp( PID, "-2" ) == 0 ) {
-		return(1);
+	char *Password = malloc(129);
+	wmove(authwin, 3, 10);
+	noecho();
+	wgetnstr(authwin, Password, 128);
+	Password[ strcspn( Password, "\n" ) ] = 0;
+
+	// aquire salt
+
+	FILE *shadow = fopen("/etc/shadow", "r");
+	if( shadow == NULL ) {
+		endwin();
+		printf("[ \033[0;31mFAIL\033[0m ] couldnt open /etc/shaddow\n");
+		return 1;
+	}
+	char *found1;
+	int BreakLoop = 0, Line = 0;
+	strcpy( textbufffer, "" );
+	while( fgets( textbufffer, 128, shadow ) && BreakLoop == 0 ) {
+		Line++;
+		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
+		char *pointerbuffer = textbufffer;
+
+		while( (found1 = strsep(&pointerbuffer,":")) != NULL && BreakLoop == 0 ) { 
+			if( strcmp( Username, found1 ) == 0 ){
+				BreakLoop = 1;
+			}
+		}
+
+	}
+	fclose( shadow );
+
+	endwin();
+	if( found1 == NULL ) {
+		//invalid username
+		printf("invalid username\n");
+		return 0; 
 	}
 
-	if (verbose == 1) {
-		printf("[  \033[0;32mOK\033[0m  ] Getting PID was Successfull! Its: ");
-	}
-	if ( !strcmp( PID, "-1" ) ) {
-		if ( verbose == 1 ) {
-			printf("Not running.\n");
-		}
-		printf("[ \033[0;34mINFO\033[0m ] DE not Running. Starting it. \n");
+	char *ShadowHash = malloc( sizeof( found1 )+1 );
+	strcpy( ShadowHash, found1 );
+	printf( "Shaddow line: %d\ncrypt:%s\n", Line, found1 );
 
-		char *DEStarter = new_argv[0];
+	char *pointerbuffer = found1;
 
-		if ( verbose == 1 ) {
-			printf( "[ \033[0;34mINFO\033[0m ] Attempting to start DE %s\n", DEStarter );
-		}	
-
-
-
-		int runp_ret = run_prog( DEStarter, new_argv, 1);
-		if ( runp_ret == 1 ) {
-			printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
-			return 1;
-		}
-
+	// free(found1);
+	int cryptline = 0;
 	
-	}
-	else {
-		if( verbose == 1) {
-			printf( "%s\n", PID );
+	char CryptAlgorythmID[32];
+	char CryptSalt[32];
+	// char* CryptID = malloc( 64 );
+	// char* CryptSalt = malloc( 2 );
+
+	char *found2;
+	printf("Layer 1:%s\n", ShadowHash);
+	while( (found2 = strsep(&pointerbuffer,"$")) != NULL ) {
+		printf("Layer 2:%s\n", ShadowHash);
+		if( strcmp( found2, "" ) != 0 && cryptline <= 2 ) {
+			cryptline++;
+			switch ( cryptline ) {
+			case 1:
+				//Algorythm ID
+				strcpy( CryptAlgorythmID, found2);
+				break;
+			case 2:
+				//Salt
+				strcpy( CryptSalt, found2);
+				break;
+			default:
+				// Luis
+				break;
+			}
 		}
-		printf("[ \033[0;31mEXIT\033[0m ] DE is Running. Exiting. \n");
-		return 0;
+	}
+
+	printf("luise\n");
+
+	char *CryptSaltFinal = malloc(strlen(CryptAlgorythmID)+strlen(CryptSalt)+4);
+	sprintf(CryptSaltFinal,"$%s$%s$", CryptAlgorythmID, CryptSalt);
+
+
+	char *Hash = crypt( Password, CryptSaltFinal );
+	printf( "DECODED:%s|\nSHADOW:%s|\n", Hash, ShadowHash );
+
+	if ( strcmp( Hash, ShadowHash ) == 0 ) {
+		printf("AUTHENTICATION SUCCESS");
+	}
+
+
+
+
+
+
+	if ( verbose == 1 ) {
+		printf( "[ \033[0;34mINFO\033[0m ] Attempting to start DE %s\n", new_argv[0] );
+	}
+
+	int runp_ret = run_prog( new_argv[0], new_argv, 1);
+	if ( runp_ret == 1 ) {
+		printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
+		return 1;
 	}
 	return 0;
 }
@@ -218,8 +304,10 @@ int main ( int argc, char **argv ) {
 //TODO:
 //Better Commenting and Documentation						NOT DONE
 //UID Checking									DONE
-//Possibly extension loading OR a list of programs to run with args needs ↓	NOT DONE
 //Better Config file parsing, 				  <----------------	DONE
 //!!!add args to the desktop starting shit you moron!!! needs this ^		DONE
+//fancy Login Screen								ALMOST FINISHED
+//actuall login system								IN PROGRESS
+
 
 // illegal forgetti
