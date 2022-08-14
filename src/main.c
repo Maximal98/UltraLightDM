@@ -6,6 +6,9 @@
 #include <spawn.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <shadow.h>
 #include <errno.h>
 #include <crypt.h>
 
@@ -177,11 +180,14 @@ int main ( int argc, char **argv ) {
 	// with height = 15 and width = 10
 	// also with start x axis 10 and start y axis = 20
 	WINDOW *authwin = newwin(5, 25, w.ws_row/2-4, w.ws_col/2-13);
-	refresh();
+	WINDOW *errorwin = newwin(2, w.ws_row, w.ws_row, w.ws_col);
 
 	box(authwin, 0, 0);
+	box(errorwin, 0, 0);
+	refresh();
 
 	// move and print in window
+	loginscreen:
 	mvwprintw(authwin, 0, 1, "placeholder login");
 	mvwprintw(authwin, 1, 1, "Username:");
 	mvwprintw(authwin, 3, 1, "Password:");
@@ -194,72 +200,44 @@ int main ( int argc, char **argv ) {
 	echo();
 	wgetnstr(authwin, Username, 128);
 	Username[ strcspn( Username, "\n" ) ] = 0;
-	
 
 	char *Password = malloc(129);
 	wmove(authwin, 3, 10);
 	noecho();
 	wgetnstr(authwin, Password, 128);
 	Password[ strcspn( Password, "\n" ) ] = 0;
-
+	
 	// aquire salt
 
-	FILE *shadow = fopen("/etc/shadow", "r");
-	if( shadow == NULL ) {
-		endwin();
-		printf("[ \033[0;31mFAIL\033[0m ] couldnt open /etc/shaddow\n");
+	struct spwd *ShadowStruct = getspnam( Username );
+
+	if( ShadowStruct == NULL ) {
+		printf("COCK\n");
 		return 1;
 	}
-	char *found1;
-	int BreakLoop = 0, Line = 0;
-	strcpy( textbufffer, "" );
-	while( fgets( textbufffer, 128, shadow ) && BreakLoop == 0 ) {
-		Line++;
-		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
-		char *pointerbuffer = textbufffer;
 
-		while( (found1 = strsep(&pointerbuffer,":")) != NULL && BreakLoop == 0 ) { 
-			if( strcmp( Username, found1 ) == 0 ){
-				BreakLoop = 1;
-			}
-		}
+	int Wrong = 0;
 
-	}
-	fclose( shadow );
+	char *desperation = ShadowStruct->sp_pwdp;
+	char *pointerbuffer = malloc( 128 );
+	strcpy( pointerbuffer, desperation );
 
-	endwin();
-	if( found1 == NULL ) {
-		//invalid username
-		printf("invalid username\n");
-		return 0; 
-	}
-
-	char *ShadowHash = malloc( sizeof( found1 )+1 );
-	strcpy( ShadowHash, found1 );
-	printf( "Shaddow line: %d\ncrypt:%s\n", Line, found1 );
-
-	char *pointerbuffer = found1;
-
-	// free(found1);
 	int cryptline = 0;
-	
 	char CryptAlgorythmID[32];
 	char CryptSalt[32];
-	// char* CryptID = malloc( 64 );
-	// char* CryptSalt = malloc( 2 );
 
-	char *found2;
-	while( (found2 = strsep(&pointerbuffer,"$")) != NULL ) {
-		if( strcmp( found2, "" ) != 0 && cryptline <= 2 ) {
+	char *found;
+	while( (found = strsep(&pointerbuffer,"$")) != NULL ) {
+		if( strcmp( found, "" ) != 0 && cryptline <= 2 ) {
 			cryptline++;
 			switch ( cryptline ) {
 			case 1:
 				//Algorythm ID
-				strcpy( CryptAlgorythmID, found2);
+				strcpy( CryptAlgorythmID, found);
 				break;
 			case 2:
 				//Salt
-				strcpy( CryptSalt, found2);
+				strcpy( CryptSalt, found);
 				break;
 			default:
 				// Luis
@@ -274,16 +252,31 @@ int main ( int argc, char **argv ) {
 
 
 	char *Hash = crypt( Password, CryptSaltFinal );
-	printf( "DECODED:%s|\nSHADOW:%s|\n", Hash, ShadowHash );
 
-	if ( strcmp( Hash, ShadowHash ) == 0 ) {
-		printf("AUTHENTICATION SUCCESS");
+	// YEET that MEAT
+	free( Password );
+
+	if ( strcmp( Hash, ShadowStruct->sp_pwdp ) == 0 ) {
+		endwin();
+		printf("AUTHENTICATION SUCCESS\n");
+	}
+	else {
+		endwin();
+		printf("shadow:%s|\nhash:%s|\n", ShadowStruct->sp_pwdp, Hash);
+		return 1;
+		mvwprintw( authwin, 1, 10, "              " );
+		mvwprintw( authwin, 3, 10, "              " );
+		mvwprintw( errorwin, 1, 10, "H:%s|\n", Hash );
+		mvwprintw( errorwin, 3, 10, "S:%s|\n", ShadowStruct->sp_pwdp );
+		wrefresh( authwin );
+		wrefresh( errorwin );
+
+		goto loginscreen;
 	}
 
-
-
-
-
+	struct passwd *UIDStruct = getpwnam( Username );
+	uid_t UID = UIDStruct->pw_uid;
+	setuid( UID );
 
 	if ( verbose == 1 ) {
 		printf( "[ \033[0;34mINFO\033[0m ] Attempting to start DE %s\n", new_argv[0] );
@@ -304,7 +297,7 @@ int main ( int argc, char **argv ) {
 //Better Config file parsing, 				  <----------------	DONE
 //!!!add args to the desktop starting shit you moron!!! needs this ^		DONE
 //fancy Login Screen								ALMOST FINISHED
-//actuall login system								IN PROGRESS
+//actual login system								IN PROGRESS
 
 
 // illegal forgetti

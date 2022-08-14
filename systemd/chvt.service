@@ -1,0 +1,10 @@
+[Unit]
+Description=Change to TTY7 automatically (part of ULDM).
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/uldm/ttyenv
+ExecStart=/usr/bin/chvt $TTY
+
+[Install]
+WantedBy=graphical.target 

@@ -1,0 +1,16 @@
+[Unit]
+Description=ULDM on %I
+Documentationv=https://unix.stackexchange.com/a/318336/5132
+Requires=dev-%I.device
+Conflicts=getty@%I.service
+
+[Service]
+RemainAfterExit=yes
+ExecStart=/home/maximilian/Documents/Source/uldm-git/build/uldm
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/%I
+
+[Install]
+WantedBy=graphical.target
