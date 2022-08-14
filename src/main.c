@@ -188,7 +188,13 @@ int main ( int argc, char **argv ) {
 
 	// move and print in window
 	loginscreen:
-	mvwprintw(authwin, 0, 1, "placeholder login");
+	char *hostname = malloc(18);
+	
+	
+	gethostname( hostname, 18 );
+	mvwprintw(authwin, 0, 1, hostname );
+	free(hostname);
+	wprintw(authwin, " login" );
 	mvwprintw(authwin, 1, 1, "Username:");
 	mvwprintw(authwin, 3, 1, "Password:");
 
