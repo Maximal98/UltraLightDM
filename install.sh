@@ -12,9 +12,11 @@ if [ "$1" != "-nosystemd" ]
 then
 	read -p 'TTY to start ULDM on (tty1, tty7):' TTYSELECTION
 	read -p 'TTY Number to start ULDM on (1, 7):' TTYNUM
-	https://raw.githubusercontent.com/Maximal98/UltraLightDM/main/systemd/uldm.service -o /etc/systemd/system/uldm@$TTYSELECTION.service
-	https://raw.githubusercontent.com/Maximal98/UltraLightDM/main/systemd/chvt.service -o /etc/systemd/system/chvt.service
-	echo "$TTY="$TTYNUM > /etc/uldm
+	curl https://raw.githubusercontent.com/Maximal98/UltraLightDM/main/systemd/uldm.service -o /etc/systemd/system/uldm@$TTYSELECTION.service
+	curl https://raw.githubusercontent.com/Maximal98/UltraLightDM/main/systemd/chvt.service -o /etc/systemd/system/chvt-$TTYNUM.service
+	echo "$TTY="$TTYNUM > /etc/uldm/ttyenv
 	systemctl enable uldm@$TTYSELECTION
-	systemctl enable chvt
+	systemctl enable chvt-$TTYNUM
 fi
+
+echo Done!
