@@ -100,9 +100,9 @@ int main ( int argc, char **argv ) {
 
 	// New Config Parser!
 
-	char DEProcess[128];
 	char ArgvPrep[X][128];
 	int ArgvLengthReal;
+	int Daemonize = 0;
 
 	while( fgets( textbufffer, 128, ConfigFile ) ) {
 		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
@@ -131,18 +131,26 @@ int main ( int argc, char **argv ) {
 
 					}
 					ArgvLengthReal = ArgAssemblerCounter;
+
+					free(Stage2found);
 					break;
 				
-				case -3:
-					//DEProcess
+				case 28:
+					//Daemonize
+					
+					char *Stage2found_1 = strsep(&pointerbuffer, "=");
 
+					if( strcmp( Stage2found_1, "true" ) == 0 ) {
+					 	Daemonize = 1;
+					} else {
+					 	Daemonize = 0;
+					}
 
-					char *found2 = strsep( &pointerbuffer, "=" );
-					strcpy( DEProcess, found2 );
-
+					//free(Stage2found_1);
 					break;
-			
+
 				default:
+					printf( "%s : %d\n", found, switchint );
 					// Saftey net for garbage data
 					break;
 			}
@@ -165,6 +173,7 @@ int main ( int argc, char **argv ) {
 
 	//Display & ncurses
 
+	nc_start:
 	initscr();
 
 	if (has_colors() == FALSE) {
@@ -188,9 +197,9 @@ int main ( int argc, char **argv ) {
 
 	// move and print in window
 	loginscreen:
+
 	char *hostname = malloc(18);
-	
-	
+
 	gethostname( hostname, 18 );
 	mvwprintw(authwin, 0, 1, hostname );
 	free(hostname);
@@ -293,6 +302,11 @@ int main ( int argc, char **argv ) {
 		printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
 		return 1;
 	}
+	
+	if( Daemonize == 1 ) {
+		goto nc_start;
+	}
+
 	return 0;
 }
 
