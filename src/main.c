@@ -34,15 +34,15 @@ int run_prog( char *prog_name, char **argv, int WaitOnProc ) {
 			printf("[  \033[0;32mOK\033[0m  ] started DE successfully!\n");
 		}
 		if( WaitOnProc == 1) {
-			wait( &status );
+			waitpid( ChildPid, &status, 0 );
 		}
 	}
 	else {
 		printf("[ \033[0;31mFAIL\033[0m ] couldn't start program, returned error code %d \n", errno);
-		return 1;
+		return -1;
 	}
 
-	return 0; 
+	return (int)ChildPid;
 }
 
 int main ( int argc, char **argv ) {
@@ -103,6 +103,7 @@ int main ( int argc, char **argv ) {
 	char ArgvPrep[X][128];
 	int ArgvLengthReal;
 	int Daemonize = 0;
+	char X_Exec[64];
 
 	while( fgets( textbufffer, 128, ConfigFile ) ) {
 		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
@@ -112,15 +113,25 @@ int main ( int argc, char **argv ) {
 
 		while( (found = strsep(&pointerbuffer,"=")) != NULL )  {
 
-			int switchint = strcmp( found, "DEStarter" );
+			int switchint = strcmp( found, "X_Exec" );
 			switch ( switchint ) {
 				case 0:
-					//DEStarter
+					//X_Exec
 
 					char *Stage2found = strsep(&pointerbuffer,"=");
+
+					strncpy( X_Exec, Stage2found, 64 );
+					
+					free(Stage2found);
+					break;
+
+				case -5:
+					//Session_Exec
+										
+					char *Stage2found_1 = strsep(&pointerbuffer,"=");
 					int ArgAssemblerCounter = 0;
 
-					while( ( found = strsep( &Stage2found, "," ) ) != NULL ) {
+					while( ( found = strsep( &Stage2found_1, "," ) ) != NULL ) {
 						
 						// ArgvPrep[ArgAssemblerCounter] = found;
 						// NEVER DO THIS ^
@@ -132,15 +143,15 @@ int main ( int argc, char **argv ) {
 					}
 					ArgvLengthReal = ArgAssemblerCounter;
 
-					free(Stage2found);
+					free(Stage2found_1);
 					break;
-				
-				case 28:
+
+				case -20:
 					//Daemonize
 					
-					char *Stage2found_1 = strsep(&pointerbuffer, "=");
+					char *Stage2found_2 = strsep(&pointerbuffer, "=");
 
-					if( strcmp( Stage2found_1, "true" ) == 0 ) {
+					if( strcmp( Stage2found_2, "true" ) == 0 ) {
 					 	Daemonize = 1;
 					} else {
 					 	Daemonize = 0;
@@ -159,6 +170,8 @@ int main ( int argc, char **argv ) {
 
 
 	}
+
+	return 0;
 
 	char **new_argv = malloc(ArgvLengthReal * sizeof *new_argv);
 	for ( int i = 0; i < ArgvLengthReal; i++ ) {
@@ -227,7 +240,7 @@ int main ( int argc, char **argv ) {
 	struct spwd *ShadowStruct = getspnam( Username );
 
 	if( ShadowStruct == NULL ) {
-		printf("COCK\n");
+		printf("unkown error with processing/getting /etc/shadow!\n");
 		return 1;
 	}
 
@@ -292,13 +305,14 @@ int main ( int argc, char **argv ) {
 	struct passwd *UIDStruct = getpwnam( Username );
 	uid_t UID = UIDStruct->pw_uid;
 	setuid( UID );
+	seteuid( UID );
 
 	if ( verbose == 1 ) {
 		printf( "[ \033[0;34mINFO\033[0m ] Attempting to start DE %s\n", new_argv[0] );
 	}
 
 	int runp_ret = run_prog( new_argv[0], new_argv, 1);
-	if ( runp_ret == 1 ) {
+	if ( runp_ret == -1 ) {
 		printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
 		return 1;
 	}
