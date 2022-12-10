@@ -1,53 +1,22 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <dirent.h>
 #include <string.h>
-#include <spawn.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <sys/types.h>
 #include <pwd.h>
-#include <shadow.h>
 #include <errno.h>
-#include <crypt.h>
-
+#include <confuse.h>
 #include <sys/ioctl.h>
 #include <ncurses.h>
+#include <shadow.h>
+#include <crypt.h>
 
-int verbose;
-extern char **environ;
-
-int run_prog( char *prog_name, char **argv, int WaitOnProc ) {
-	//Starting DE Setup
-	if( verbose == 1 ) {
-		printf("[ \033[0;34mINFO\033[0m ] Trying to start DE\n");
-	}
-	pid_t ChildPid;
-	int status;
-	//Starting and Error handling
-
-	status = posix_spawn(&ChildPid, prog_name, NULL, NULL, argv, environ);
-	int error = errno;
-	if ( status == 0 ) {
-		if( verbose == 1) {
-			printf("[  \033[0;32mOK\033[0m  ] started DE successfully!\n");
-		}
-		if( WaitOnProc == 1) {
-			waitpid( ChildPid, &status, 0 );
-		}
-	}
-	else {
-		printf("[ \033[0;31mFAIL\033[0m ] couldn't start program, returned error code %d \n", errno);
-		return -1;
-	}
-
-	return (int)ChildPid;
-}
+#include "exec_process.h"
 
 int main ( int argc, char **argv ) {
 
-	int errnum;
+	int errnum, verbose;
 
 	#define X 128
 
@@ -102,81 +71,27 @@ int main ( int argc, char **argv ) {
 
 	char ArgvPrep[X][128];
 	int ArgvLengthReal;
-	int Daemonize = 0;
 	char X_Exec[64];
+	
+	//libConfuse Setup
+	static cfg_bool_t Daemonize = cfg_true;
+	static char *XServerPath = "/usr/bin/Xorg";
+	static char *XSessionPath = NULL;
+	
+	cfg_opt_t ConfuseOptions[] = {
+		CFG_SIMPLE_BOOL( "Daemonize", &Daemonize ),
+		CFG_SIMPLE_STR( "XServerPath" , &XServerPath ),
+		CFG_SIMPLE_STR( "XSessionPath" , &XSessionPath ),
+		CFG_END()
+	};
+	cfg_t *config;
+	config = cfg_init(ConfuseOptions, 0);
+	
 
-	while( fgets( textbufffer, 128, ConfigFile ) ) {
-		textbufffer[ strcspn( textbufffer, "\n" ) ] = 0;
-
-		char *pointerbuffer = textbufffer;
-		char *found = "placeholder";
-
-		while( (found = strsep(&pointerbuffer,"=")) != NULL )  {
-
-			int switchint = strcmp( found, "X_Exec" );
-			switch ( switchint ) {
-				case 0:
-					//X_Exec
-
-					char *Stage2found = strsep(&pointerbuffer,"=");
-
-					strncpy( X_Exec, Stage2found, 64 );
-					
-					free(Stage2found);
-					break;
-
-				case -5:
-					//Session_Exec
-										
-					char *Stage2found_1 = strsep(&pointerbuffer,"=");
-					int ArgAssemblerCounter = 0;
-
-					while( ( found = strsep( &Stage2found_1, "," ) ) != NULL ) {
-						
-						// ArgvPrep[ArgAssemblerCounter] = found;
-						// NEVER DO THIS ^
-
-						strcpy( ArgvPrep[ArgAssemblerCounter], found );
-						ArgAssemblerCounter++;
-						
-
-					}
-					ArgvLengthReal = ArgAssemblerCounter;
-
-					free(Stage2found_1);
-					break;
-
-				case -20:
-					//Daemonize
-					
-					char *Stage2found_2 = strsep(&pointerbuffer, "=");
-
-					if( strcmp( Stage2found_2, "true" ) == 0 ) {
-					 	Daemonize = 1;
-					} else {
-					 	Daemonize = 0;
-					}
-
-					//free(Stage2found_1);
-					break;
-
-				default:
-					printf( "%s : %d\n", found, switchint );
-					// Saftey net for garbage data
-					break;
-			}
-		}
-
-
-
-	}
-
-	return 0;
-
-	char **new_argv = malloc(ArgvLengthReal * sizeof *new_argv);
-	for ( int i = 0; i < ArgvLengthReal; i++ ) {
-		new_argv[i] = ArgvPrep[i];
-	}
+	// char **new_argv = malloc(ArgvLengthReal * sizeof *new_argv);
+	// for ( int i = 0; i < ArgvLengthReal; i++ ) {
+	//	new_argv[i] = ArgvPrep[i];
+	// }
 
 	
 	fclose( ConfigFile );
@@ -235,67 +150,39 @@ int main ( int argc, char **argv ) {
 	wgetnstr(authwin, Password, 128);
 	Password[ strcspn( Password, "\n" ) ] = 0;
 	
-	// aquire salt
 
 	struct spwd *ShadowStruct = getspnam( Username );
-
 	if( ShadowStruct == NULL ) {
-		printf("unkown error with processing/getting /etc/shadow!\n");
-		return 1;
+		//Nonexistent user?
+		return -2;
 	}
-
-	int Wrong = 0;
-
-	char *desperation = ShadowStruct->sp_pwdp;
-	char *pointerbuffer = malloc( 128 );
-	strcpy( pointerbuffer, desperation );
-
-	int cryptline = 0;
-	char CryptAlgorythmID[32];
-	char CryptSalt[32];
-
-	char *found;
-	while( (found = strsep(&pointerbuffer,"$")) != NULL ) {
-		if( strcmp( found, "" ) != 0 && cryptline <= 2 ) {
-			cryptline++;
-			switch ( cryptline ) {
-			case 1:
-				//Algorythm ID
-				strcpy( CryptAlgorythmID, found);
-				break;
-			case 2:
-				//Salt
-				strcpy( CryptSalt, found);
-				break;
-			default:
-				// Luis
-				break;
-			}
-		}
+	char *PasswordHash = ShadowStruct->sp_pwdp;
+	char *FinalHash;
+	FinalHash = crypt( Password, PasswordHash );
+	int AuthTrue = 0;
+	
+	if( FinalHash == PasswordHash ) {
+		//Password is correct!
+		AuthTrue = 1;
 	}
+	free(ShadowStruct);
+	free(PasswordHash);
+	free(FinalHash);
 
-
-	char *CryptSaltFinal = malloc(strlen(CryptAlgorythmID)+strlen(CryptSalt)+4);
-	sprintf(CryptSaltFinal,"$%s$%s$", CryptAlgorythmID, CryptSalt);
-
-
-	char *Hash = crypt( Password, CryptSaltFinal );
-
+	
 	// YEET that MEAT
 	free( Password );
 
-	if ( strcmp( Hash, ShadowStruct->sp_pwdp ) == 0 ) {
+	if ( AuthTrue == 1 ) {
 		endwin();
-		printf("AUTHENTICATION SUCCESS\n");
+		// success!
 	}
 	else {
 		endwin();
-		printf("shadow:%s|\nhash:%s|\n", ShadowStruct->sp_pwdp, Hash);
 		return 1;
 		mvwprintw( authwin, 1, 10, "              " );
 		mvwprintw( authwin, 3, 10, "              " );
-		mvwprintw( errorwin, 1, 10, "H:%s|\n", Hash );
-		mvwprintw( errorwin, 3, 10, "S:%s|\n", ShadowStruct->sp_pwdp );
+		mvwprintw( errorwin, 1, 10, "Authentication Failure!" );
 		wrefresh( authwin );
 		wrefresh( errorwin );
 
@@ -306,12 +193,18 @@ int main ( int argc, char **argv ) {
 	uid_t UID = UIDStruct->pw_uid;
 	setuid( UID );
 	seteuid( UID );
+	
+	//we'll fix it another day
+	char *new_argv[] = {
+		XSessionPath,
+		NULL
+	};
 
 	if ( verbose == 1 ) {
-		printf( "[ \033[0;34mINFO\033[0m ] Attempting to start DE %s\n", new_argv[0] );
+		printf( "[ \033[0;34mINFO\033[0m ] Attempting to start %s\n", new_argv[0] );
 	}
 
-	int runp_ret = run_prog( new_argv[0], new_argv, 1);
+	int runp_ret = exec_process( new_argv[0], new_argv, 1);
 	if ( runp_ret == -1 ) {
 		printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
 		return 1;
@@ -325,13 +218,27 @@ int main ( int argc, char **argv ) {
 }
 
 
-//TODO:
-//Better Commenting and Documentation						NOT DONE
-//UID Checking									DONE
-//Better Config file parsing, 				  <----------------	DONE
-//!!!add args to the desktop starting shit you moron!!! needs this ^		DONE
+
+
+//high priority
+//segment out into seperate source files					NOT DONE
+//switch to libConfuse, the Confparser is ok, but still not the best.		NOT DONE
+
+//medium priority
 //fancy Login Screen								ALMOST FINISHED
 //actual login system								IN PROGRESS
+
+//low priority
+//Better Commenting and Documentation						NOT DONE
+//what the fuck why am i using strcmp as a hashing algorithm			WONT FIX ( part of oldparser, which is going to be removed. )
+//wayland rnd									NOT DONE
+
+//Done
+//UID Checking
+//Better Config file parsing, 				  <----------------
+//!!!add args to the desktop starting shit you moron!!! needs this ^
+//oh god fix the shadow code
+
 
 
 // illegal forgetti
