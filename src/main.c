@@ -14,11 +14,12 @@
 
 #include "exec_process.h"
 
+#define ArgsX 32
+#define ArgsY 8
+
 int main ( int argc, char **argv ) {
 
-	int errnum, verbose;
-
-	#define X 128
+	int error, verbose;
 
 	// Process arguments
 	if( argc > 2) {
@@ -48,32 +49,18 @@ int main ( int argc, char **argv ) {
 		return 0;
 	}
 
-	char RunningUIDChar[128];
-	snprintf( RunningUIDChar, 128, "%d", RunningUID );
-
-	//Config File reading setup
-	FILE *ConfigFile;
-	char textbufffer[128];
-	int Count = 0;
-
-	//Loading Configuration
-	if( verbose == 1 ) {
-		printf("[ \033[0;34mINFO\033[0m ] Loading config file.\n");
-	}
-	ConfigFile = fopen("/etc/uldm/config", "r");
+	//Check if config exists
+	FILE *ConfigFile = fopen("/etc/uldm/config", "r");
 	if( ConfigFile == NULL ) {
-		errnum = errno;
-		printf("There was an error opening the Config file. Check if it exists and this user has read access to it. fopen error %d\n", errnum);
+		error = errno;
+		printf("There was an error opening the Config file. Check if it exists and this user has read access to it. fopen error %d\n", error);
 		return 1;
 	}
-
-	// New Config Parser!
-
-	char ArgvPrep[X][128];
-	int ArgvLengthReal;
-	char X_Exec[64];
+	fclose( ConfigFile );
 	
 	//libConfuse Setup
+	
+	//defaults
 	static cfg_bool_t Daemonize = cfg_true;
 	static char *XServerPath = "/usr/bin/Xorg";
 	static char *XSessionPath = NULL;
@@ -81,139 +68,168 @@ int main ( int argc, char **argv ) {
 	cfg_opt_t ConfuseOptions[] = {
 		CFG_SIMPLE_BOOL( "Daemonize", &Daemonize ),
 		CFG_SIMPLE_STR( "XServerPath" , &XServerPath ),
+		CFG_STR_LIST( "XServerArgs", "", CFGF_NONE ),
 		CFG_SIMPLE_STR( "XSessionPath" , &XSessionPath ),
+		CFG_STR_LIST( "XSessionArgs", "", CFGF_NONE ),
 		CFG_END()
 	};
+	
 	cfg_t *config;
 	config = cfg_init(ConfuseOptions, 0);
+	cfg_parse( config, "/etc/uldm/config" );
 	
-
-	// char **new_argv = malloc(ArgvLengthReal * sizeof *new_argv);
-	// for ( int i = 0; i < ArgvLengthReal; i++ ) {
-	//	new_argv[i] = ArgvPrep[i];
-	// }
-
+	int XServerArgIncrementor;
+	char XServerArgvPrep[ArgsY][ArgsX];
+	strncpy( XServerArgvPrep[0], XServerPath, ArgsX );
+	for( XServerArgIncrementor = 1; XServerArgIncrementor < cfg_size(config, "XServerArgs") && XServerArgIncrementor <= ArgsY; XServerArgIncrementor++) {
+		strncpy( XServerArgvPrep[XServerArgIncrementor], cfg_getnstr(config, "targets", XServerArgIncrementor), ArgsX );
+	}
+	printf("!\n");
 	
-	fclose( ConfigFile );
+	int XSessionArgIncrementor;
+	char XSessionArgvPrep[ArgsY][ArgsX];
+	strncpy( XSessionArgvPrep[0], XSessionPath, ArgsX );
+	for( XSessionArgIncrementor = 1; XSessionArgIncrementor < cfg_size(config, "XServerArgs") && XSessionArgIncrementor <= ArgsY; XSessionArgIncrementor++) {
+		strncpy( XSessionArgvPrep[XServerArgIncrementor], cfg_getnstr(config, "targets", XSessionArgIncrementor), ArgsX );
+	}
+	printf("!\n");
 
 	printf("[  \033[0;32mOK\033[0m  ] Successfully loaded config file!\n");
 
-
+	char **XServerArgv = malloc( XServerArgIncrementor * sizeof( XServerArgv ) );
+	int XServerIncrementor;
+	for ( int XServerIncrementor = 0; XServerIncrementor < XServerArgIncrementor; XServerIncrementor++ ) {
+		XServerArgv[XServerIncrementor] = XServerArgvPrep[XServerIncrementor];
+	}
+	//this wont compile, fix later
+	free( XServerArgvPrep )
+	
+	char **XSessionArgv = malloc( XSessionArgIncrementor * sizeof( XServerArgv ) );
+	int XSessionIncrementor;
+	for ( int XSessionIncrementor = 0; XSessionIncrementor < XSessionArgIncrementor; XSessionIncrementor++ ) {
+		XSessionArgv[XSessionIncrementor] = XSessionArgvPrep[XSessionIncrementor];
+	}
+	
+	
 	//Display & ncurses
-
-	nc_start:
-	initscr();
-
-	if (has_colors() == FALSE) {
-		endwin();
-		printf("[ \033[0;31mFAIL\033[0m ] Your terminal does not support color.\n");
-		return 1;
-	}
-
-	struct winsize w;
-	ioctl(0, TIOCGWINSZ, &w);
-
-	// creating a window;
-	// with height = 15 and width = 10
-	// also with start x axis 10 and start y axis = 20
-	WINDOW *authwin = newwin(5, 25, w.ws_row/2-4, w.ws_col/2-13);
-	WINDOW *errorwin = newwin(2, w.ws_row, w.ws_row, w.ws_col);
-
-	box(authwin, 0, 0);
-	box(errorwin, 0, 0);
-	refresh();
-
-	// move and print in window
-	loginscreen:
-
-	char *hostname = malloc(18);
-
-	gethostname( hostname, 18 );
-	mvwprintw(authwin, 0, 1, hostname );
-	free(hostname);
-	wprintw(authwin, " login" );
-	mvwprintw(authwin, 1, 1, "Username:");
-	mvwprintw(authwin, 3, 1, "Password:");
-
-	wrefresh(authwin);
-
-	char *Username = malloc(129);
-
-	wmove(authwin, 1, 10);
-	echo();
-	wgetnstr(authwin, Username, 128);
-	Username[ strcspn( Username, "\n" ) ] = 0;
-
-	char *Password = malloc(129);
-	wmove(authwin, 3, 10);
-	noecho();
-	wgetnstr(authwin, Password, 128);
-	Password[ strcspn( Password, "\n" ) ] = 0;
+	int LoopEscape1;
+	while( LoopEscape1 == 0 ) {
+		initscr();
 	
-
-	struct spwd *ShadowStruct = getspnam( Username );
-	if( ShadowStruct == NULL ) {
-		//Nonexistent user?
-		return -2;
-	}
-	char *PasswordHash = ShadowStruct->sp_pwdp;
-	char *FinalHash;
-	FinalHash = crypt( Password, PasswordHash );
-	int AuthTrue = 0;
+		if (has_colors() == FALSE) {
+			endwin();
+			printf("[ \033[0;31mFAIL\033[0m ] Your terminal does not support color.\n");
+			return 1;
+		}
 	
-	if( FinalHash == PasswordHash ) {
-		//Password is correct!
-		AuthTrue = 1;
-	}
-	free(ShadowStruct);
-	free(PasswordHash);
-	free(FinalHash);
-
+		struct winsize w;
+		ioctl(0, TIOCGWINSZ, &w);
+		// nice documentation wtf does tiocgwinsz mean idiot
 	
-	// YEET that MEAT
-	free( Password );
-
-	if ( AuthTrue == 1 ) {
-		endwin();
-		// success!
-	}
-	else {
-		endwin();
-		return 1;
-		mvwprintw( authwin, 1, 10, "              " );
-		mvwprintw( authwin, 3, 10, "              " );
-		mvwprintw( errorwin, 1, 10, "Authentication Failure!" );
-		wrefresh( authwin );
-		wrefresh( errorwin );
-
-		goto loginscreen;
-	}
-
-	struct passwd *UIDStruct = getpwnam( Username );
-	uid_t UID = UIDStruct->pw_uid;
-	setuid( UID );
-	seteuid( UID );
+		WINDOW *authwin = newwin(5, 25, w.ws_row/2-4, w.ws_col/2-13);
+		WINDOW *errorwin = newwin(2, w.ws_row, w.ws_row, w.ws_col);
 	
-	//we'll fix it another day
-	char *new_argv[] = {
-		XSessionPath,
-		NULL
-	};
+		box(authwin, 0, 0);
+		box(errorwin, 0, 0);
+		refresh();
+	
+		// move and print in window
+		uid_t UserUID;
+	
+		int LoopEscape2 = 0;
+		while( LoopEscape2 == 0 ) {
+	
+			char *hostname = malloc(18);
+	
+			gethostname( hostname, 18 );
+			mvwprintw(authwin, 0, 1, "%s", hostname );
+			free(hostname);
+			wprintw(authwin, " login" );
+			mvwprintw(authwin, 1, 1, "Username:");
+			mvwprintw(authwin, 3, 1, "Password:");
+	
+			wrefresh(authwin);
+		
+	
+		
+			wmove(authwin, 1, 10);
+			echo();
+			
+			char *Username = malloc(129);
+			wgetnstr(authwin, Username, 128);
+			Username[ strcspn( Username, "\n" ) ] = 0;
+		
+			char *Password = malloc(129);
+			wmove(authwin, 3, 10);
+			noecho();
+			wgetnstr(authwin, Password, 128);
+			Password[ strcspn( Password, "\n" ) ] = 0;
+			
+		
+			struct spwd *ShadowStruct = getspnam( Username );
+			if( ShadowStruct == NULL ) {
+				//Nonexistent user?
+				return -2;
+			}
+			struct passwd *UIDStruct = getpwnam( Username );
+			UserUID = UIDStruct->pw_uid;
+			free( UIDStruct );
+			
+			char *PasswordHash = ShadowStruct->sp_pwdp;
+			char *FinalHash;
+			FinalHash = crypt( Password, PasswordHash );
+			free( Password );
+			int AuthTrue = 0;
+			
+			if( FinalHash == PasswordHash ) {
+				//Password is correct!
+				AuthTrue = 1;
+			}
+			free(ShadowStruct);
+			free(PasswordHash);
+			free(FinalHash);
+		
+			if ( AuthTrue == 1 ) {
+				endwin();
+				LoopEscape2 = 1;
+				// success!
+			}
+			else {
+				endwin();
+				mvwprintw( authwin, 1, 10, "              " );
+				mvwprintw( authwin, 3, 10, "              " );
+				mvwprintw( errorwin, 1, 10, "Authentication Failure!" );
+				wrefresh( authwin );
+				wrefresh( errorwin );
+		
+			}
+		}
+		
+		setuid( UserUID );
+		seteuid( UserUID );
+		
+		//we'll fix it another day
+		char *new_argv[] = {
+			XSessionPath,
+			NULL
+		};
+	
+		if ( verbose == 1 ) {
+			printf( "[ \033[0;34mINFO\033[0m ] Attempting to start %s\n", new_argv[0] );
+		}
+	
+		int runp_ret = exec_process( XSessionArgv[0], XSessionArgv, 1);
+		if ( runp_ret == -1 ) {
+			printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
+			return 1;
+		}
 
-	if ( verbose == 1 ) {
-		printf( "[ \033[0;34mINFO\033[0m ] Attempting to start %s\n", new_argv[0] );
-	}
-
-	int runp_ret = exec_process( new_argv[0], new_argv, 1);
-	if ( runp_ret == -1 ) {
-		printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
-		return 1;
+		if( Daemonize != 1 ) {
+			LoopEscape1 = 1;
+		}
+	
 	}
 	
-	if( Daemonize == 1 ) {
-		goto nc_start;
-	}
-
 	return 0;
 }
 
@@ -222,15 +238,14 @@ int main ( int argc, char **argv ) {
 
 //high priority
 //segment out into seperate source files					NOT DONE
-//switch to libConfuse, the Confparser is ok, but still not the best.		NOT DONE
+//add the arguments to libconfuse						NOT DONE
 
 //medium priority
-//fancy Login Screen								ALMOST FINISHED
-//actual login system								IN PROGRESS
+//fancy Login Screen								NOT DONE
+//actual login system								NOT DONE
 
 //low priority
 //Better Commenting and Documentation						NOT DONE
-//what the fuck why am i using strcmp as a hashing algorithm			WONT FIX ( part of oldparser, which is going to be removed. )
 //wayland rnd									NOT DONE
 
 //Done
@@ -238,7 +253,9 @@ int main ( int argc, char **argv ) {
 //Better Config file parsing, 				  <----------------
 //!!!add args to the desktop starting shit you moron!!! needs this ^
 //oh god fix the shadow code
-
+//DO NOT USE GOTO!!!
+//switch to libConfuse, the Confparser is ok, but still not the best.
+//what the fuck why am i using strcmp as a hashing algorithm			WONT FIX ( part of oldparser, which is going to be removed. )
 
 
 // illegal forgetti
