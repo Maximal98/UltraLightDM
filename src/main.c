@@ -6,13 +6,13 @@
 #include <sys/wait.h>
 #include <pwd.h>
 #include <errno.h>
-#include <confuse.h>
 #include <sys/ioctl.h>
 #include <ncurses.h>
 #include <shadow.h>
 #include <crypt.h>
 
 #include "exec_process.h"
+#include "config.h"
 
 #define ArgsX 32
 #define ArgsY 8
@@ -48,79 +48,16 @@ int main ( int argc, char **argv ) {
 		printf("[ \033[0;31mEXIT\033[0m ] Must be run as root. Quitting. \n");
 		return 0;
 	}
+	
+	struct ConfigStruct Configuration = configure( "/etc/uldm/config" );
 
-	//Check if config exists
-	FILE *ConfigFile = fopen("/etc/uldm/config", "r");
-	if( ConfigFile == NULL ) {
-		error = errno;
-		printf("There was an error opening the Config file. Check if it exists and this user has read access to it. fopen error %d\n", error);
-		return 1;
-	}
-	fclose( ConfigFile );
 	
-	//libConfuse Setup
-	
-	//defaults
-	static cfg_bool_t Daemonize = cfg_true;
-	static char *XServerPath = "/usr/bin/Xorg";
-	static char *XSessionPath = NULL;
-	
-	cfg_opt_t ConfuseOptions[] = {
-		CFG_SIMPLE_BOOL( "Daemonize", &Daemonize ),
-		CFG_SIMPLE_STR( "XServerPath" , &XServerPath ),
-		CFG_STR_LIST( "XServerArgs", "", CFGF_NONE ),
-		CFG_SIMPLE_STR( "XSessionPath" , &XSessionPath ),
-		CFG_STR_LIST( "XSessionArgs", "", CFGF_NONE ),
-		CFG_END()
-	};
-	
-	cfg_t *config;
-	config = cfg_init(ConfuseOptions, 0);
-	cfg_parse( config, "/etc/uldm/config" );
-	
-	int XServerArgIncrementor;
-	char XServerArgvPrep[ArgsY][ArgsX];
-	strncpy( XServerArgvPrep[0], XServerPath, ArgsX );
-	for( XServerArgIncrementor = 1; XServerArgIncrementor < cfg_size(config, "XServerArgs") && XServerArgIncrementor <= ArgsY; XServerArgIncrementor++) {
-		strncpy( XServerArgvPrep[XServerArgIncrementor], cfg_getnstr(config, "targets", XServerArgIncrementor), ArgsX );
-	}
-	printf("!\n");
-	
-	int XSessionArgIncrementor;
-	char XSessionArgvPrep[ArgsY][ArgsX];
-	strncpy( XSessionArgvPrep[0], XSessionPath, ArgsX );
-	for( XSessionArgIncrementor = 1; XSessionArgIncrementor < cfg_size(config, "XServerArgs") && XSessionArgIncrementor <= ArgsY; XSessionArgIncrementor++) {
-		strncpy( XSessionArgvPrep[XServerArgIncrementor], cfg_getnstr(config, "targets", XSessionArgIncrementor), ArgsX );
-	}
-	printf("!\n");
-
 	printf("[  \033[0;32mOK\033[0m  ] Successfully loaded config file!\n");
-
-	char **XServerArgv = malloc( XServerArgIncrementor * sizeof( XServerArgv ) );
-	int XServerIncrementor;
-	for ( int XServerIncrementor = 0; XServerIncrementor < XServerArgIncrementor; XServerIncrementor++ ) {
-		XServerArgv[XServerIncrementor] = XServerArgvPrep[XServerIncrementor];
-	}
-	//this wont compile, fix later
-	free( XServerArgvPrep )
-	
-	char **XSessionArgv = malloc( XSessionArgIncrementor * sizeof( XServerArgv ) );
-	int XSessionIncrementor;
-	for ( int XSessionIncrementor = 0; XSessionIncrementor < XSessionArgIncrementor; XSessionIncrementor++ ) {
-		XSessionArgv[XSessionIncrementor] = XSessionArgvPrep[XSessionIncrementor];
-	}
-	
 	
 	//Display & ncurses
 	int LoopEscape1;
 	while( LoopEscape1 == 0 ) {
 		initscr();
-	
-		if (has_colors() == FALSE) {
-			endwin();
-			printf("[ \033[0;31mFAIL\033[0m ] Your terminal does not support color.\n");
-			return 1;
-		}
 	
 		struct winsize w;
 		ioctl(0, TIOCGWINSZ, &w);
@@ -150,8 +87,6 @@ int main ( int argc, char **argv ) {
 	
 			wrefresh(authwin);
 		
-	
-		
 			wmove(authwin, 1, 10);
 			echo();
 			
@@ -179,6 +114,7 @@ int main ( int argc, char **argv ) {
 			char *FinalHash;
 			FinalHash = crypt( Password, PasswordHash );
 			free( Password );
+			free( Username );
 			int AuthTrue = 0;
 			
 			if( FinalHash == PasswordHash ) {
@@ -207,24 +143,18 @@ int main ( int argc, char **argv ) {
 		
 		setuid( UserUID );
 		seteuid( UserUID );
-		
-		//we'll fix it another day
-		char *new_argv[] = {
-			XSessionPath,
-			NULL
-		};
 	
 		if ( verbose == 1 ) {
-			printf( "[ \033[0;34mINFO\033[0m ] Attempting to start %s\n", new_argv[0] );
+			printf( "[ \033[0;34mINFO\033[0m ] Attempting to start %s\n", Configuration.XSessionArgs[0] );
 		}
 	
-		int runp_ret = exec_process( XSessionArgv[0], XSessionArgv, 1);
+		int runp_ret = exec_process( Configuration.XSessionArgs[0], Configuration.XSessionArgs, 1);
 		if ( runp_ret == -1 ) {
 			printf("[ \033[0;31mFAIL\033[0m ] there was an error launching the DE.\n");
 			return 1;
 		}
 
-		if( Daemonize != 1 ) {
+		if( Configuration.Daemonize != 1 ) {
 			LoopEscape1 = 1;
 		}
 	
@@ -237,16 +167,16 @@ int main ( int argc, char **argv ) {
 
 
 //high priority
-//segment out into seperate source files					NOT DONE
-//add the arguments to libconfuse						NOT DONE
+//get it running as a daemon							NOT DONE
 
 //medium priority
 //fancy Login Screen								NOT DONE
-//actual login system								NOT DONE
+//segment MORE...								NOT DONE
 
 //low priority
 //Better Commenting and Documentation						NOT DONE
 //wayland rnd									NOT DONE
+//error handling is sorta missing in a lotta places but uhh it works so		NOT DONE
 
 //Done
 //UID Checking
@@ -255,7 +185,9 @@ int main ( int argc, char **argv ) {
 //oh god fix the shadow code
 //DO NOT USE GOTO!!!
 //switch to libConfuse, the Confparser is ok, but still not the best.
-//what the fuck why am i using strcmp as a hashing algorithm			WONT FIX ( part of oldparser, which is going to be removed. )
-
+//what the fuck why am i using strcmp as a hashing algorithm
+//actual login system
+//add the Argvs to libconfuse
+//basic sectioning
 
 // illegal forgetti
